@@ -1,5 +1,12 @@
 # CustomSoundpad
-
+1.灵感来源: https://github.com/Mug1vara97/UniteFx  
+## AI  Content:
+1.InjectAudioApo 由人类编写  
+2.InjectAudioApo.ApoTester + Setup由ai完成  
+3.frontend + build.ps1 由AI编写(我不会前端...)  
+4.test.wav为 [连烦恼也融入天空 -- 塞壬唱片-MSR](https://monster-siren.hypergryph.com/music/514591)  (真的很好听)  
+下为ai生成 我不擅长文书
+## Start 
 Windows 平台的注入式音效板（Soundpad）项目：Godot 4 C# 前端 + C++ GDExtension + Windows APO 音频处理驱动。
 
 本仓库是**聚合仓库（meta repo）**，本身不含源码，只通过 `git submodule` 引用两个子仓库。
@@ -8,8 +15,8 @@ Windows 平台的注入式音效板（Soundpad）项目：Godot 4 C# 前端 + C+
 
 | 路径 | 子仓库 | 内容 |
 | --- | --- | --- |
-| `CustomSoundpad_frontend/` | `killjsj/custom_soundpad_frontend`（private） | Godot 4 项目 + C++ GDExtension 源码（`src/`、`project/`），自带 `godot-cpp` 子模块 |
-| `InjectAudioApo/` | `killjsj/inject_audio_apo`（private） | APO 驱动本体（C++/ATL）、`ApoTester` 测试程序、`Setup` 安装工程 |
+| `CustomSoundpad_frontend/` | `killjsj/custom_soundpad_frontend` | Godot 4 项目 + C++ GDExtension 源码（`src/`、`project/`），自带 `godot-cpp` 子模块 |
+| `InjectAudioApo/` | `killjsj/inject_audio_apo`| APO 驱动本体（C++/ATL）、`ApoTester` 测试程序、`Setup` 安装工程 |
 
 远端地址：
 
@@ -28,8 +35,6 @@ git clone --recurse-submodules https://github.com/killjsj/custom_soundpad.git
 ```powershell
 git submodule update --init --recursive
 ```
-
-> 三个仓库都是 private，首次访问需要 GitHub 凭据（Git Credential Manager / `gh auth login`）。
 
 ## 日常提交
 
@@ -172,11 +177,7 @@ git push
 customSoundPad/
 ├── README.md                     # 本文件
 ├── update.ps1                    # 一键提交 + 推送（三个仓库按序处理）
-├── CustomSoundpad_frontend/      # submodule → custom_soundpad_frontend
-│   ├── src/                      # GDExtension C++ 源码（ApoWriter / ApoInstaller / ApoBindingGuard ...）
-│   ├── project/                  # Godot 4 项目（C#：SoundpadMain / GlobalHotkeys / AudioVisualizer）
-│   ├── godot-cpp/                # submodule → godotengine/godot-cpp
-│   └── SConstruct
+├── CustomSoundpad_frontend
 └── InjectAudioApo/               # submodule → inject_audio_apo
     ├── Apo/                      # APO 驱动（InjectAudioApoDll / EFX）
     ├── ApoTester/                # 测试程序 + test.wav（46 MB，已提交）
