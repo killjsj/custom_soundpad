@@ -1,0 +1,13 @@
+# OS generated
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Logs
+*.log
+
+# Local scratch
+_sandbox/
+
+# Build output (build.ps1)
+build/

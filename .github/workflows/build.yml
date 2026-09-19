@@ -1,0 +1,135 @@
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  GODOT_TAG: 4.7.1-stable
+  GODOT_KEY: 4.7.1.stable.mono
+  GODOT_ASSET: Godot_v4.7.1-stable_mono
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout (submodules frontend + InjectAudioApo)
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # 1. 编译 InjectAudioApo（默认 WDK 工具集；runner 没有 WDK 时回退 v143）
+      - name: Build InjectAudioApo (Release|x64)
+        shell: pwsh
+        run: |
+          $msbuildArgs = @(
+            'InjectAudioApo\Apo\InjectAudioApo.vcxproj',
+            '/nologo', '/m', '/v:minimal',
+            '/p:Configuration=Release', '/p:Platform=x64'
+          )
+          msbuild @msbuildArgs
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning 'WDK toolset build failed, retrying with PlatformToolset=v143...'
+            msbuild @msbuildArgs '/p:PlatformToolset=v143'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      # 2. 未签名 DLL -> frontend\bin\InjectAudioApo_unsign.dll（安装时在用户机器上复制并签名）
+      # 3. signtool.exe -> frontend\bin（ApoInstaller 在用户机器上签名时使用）
+      - name: Stage bin (unsigned APO + signtool)
+        shell: pwsh
+        run: |
+          $bin = 'CustomSoundpad_frontend\bin'
+          New-Item -ItemType Directory -Force $bin | Out-Null
+
+          $built = 'InjectAudioApo\build\bin\x64\Release\InjectAudioApo.dll'
+          if (-not (Test-Path -LiteralPath $built)) { throw "APO DLL not found: $built" }
+          Copy-Item -LiteralPath $built -Destination (Join-Path $bin 'InjectAudioApo_unsign.dll') -Force
+          Remove-Item -LiteralPath (Join-Path $bin 'InjectAudioApo.dll') -Force -ErrorAction SilentlyContinue
+
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { throw 'signtool.exe not found on runner' }
+          Copy-Item -LiteralPath $signtool -Destination (Join-Path $bin 'signtool.exe') -Force
+
+          Get-ChildItem -LiteralPath $bin | Select-Object Name, Length
+
+      # 4. 下载 Godot 4.7.1 mono + 导出模板
+      - name: Install Godot + export templates
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+
+          $godotZip = Join-Path $env:RUNNER_TEMP 'godot.zip'
+          $godotDir = Join-Path $env:RUNNER_TEMP 'godot'
+          $godotUrl = "https://github.com/godotengine/godot/releases/download/${env:GODOT_TAG}/${env:GODOT_ASSET}_win64.zip"
+          Invoke-WebRequest -Uri $godotUrl -OutFile $godotZip
+          Expand-Archive -LiteralPath $godotZip -DestinationPath $godotDir -Force
+
+          $godotExe = Get-ChildItem -LiteralPath $godotDir -Recurse -Filter '*_console.exe' |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $godotExe) { throw 'Godot executable not found in archive' }
+          "GODOT_EXE=$godotExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Godot: $godotExe"
+
+          $tpz = Join-Path $env:RUNNER_TEMP 'templates.tpz'
+          $templatesUrl = "https://github.com/godotengine/godot/releases/download/${env:GODOT_TAG}/${env:GODOT_ASSET}_export_templates.tpz"
+          Invoke-WebRequest -Uri $templatesUrl -OutFile $tpz
+          $extract = Join-Path $env:RUNNER_TEMP 'templates'
+          Expand-Archive -LiteralPath $tpz -DestinationPath $extract -Force
+
+          $target = Join-Path $env:APPDATA "Godot\export_templates\${env:GODOT_KEY}"
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Copy-Item -Path (Join-Path $extract 'templates\*') -Destination $target -Recurse -Force
+          Get-ChildItem -LiteralPath $target -Filter 'windows_*_x86_64.exe' | Select-Object Name
+
+      # 5. Godot 导出 Windows Desktop -> build\
+      - name: Export Godot project (Windows Desktop)
+        shell: pwsh
+        run: |
+          $name = 'CustomSoundpad'
+          $match = Select-String -Path 'CustomSoundpad_frontend\project.godot' -Pattern 'config/name="([^"]+)"' |
+            Select-Object -First 1
+          if ($match) { $name = $match.Matches[0].Groups[1].Value }
+
+          New-Item -ItemType Directory -Force build | Out-Null
+          & $env:GODOT_EXE --headless --path CustomSoundpad_frontend --export-release 'Windows Desktop' "build\$name.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem -LiteralPath build | Select-Object Name, Length
+
+      # 6. frontend\bin -> build\bin
+      - name: Package bin
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath 'build\bin') { Remove-Item -LiteralPath 'build\bin' -Recurse -Force }
+          Copy-Item -LiteralPath 'CustomSoundpad_frontend\bin' -Destination 'build\bin' -Recurse -Force
+          Get-ChildItem -LiteralPath build -Recurse | Select-Object FullName, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomSoundpad-windows-x64
+          path: build/
+          if-no-files-found: error
+
+      - name: Create release (tag only)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = "CustomSoundpad-$env:GITHUB_REF_NAME.zip"
+          Compress-Archive -Path 'build\*' -DestinationPath $zip -Force
+          gh release create $env:GITHUB_REF_NAME $zip --title $env:GITHUB_REF_NAME --generate-notes

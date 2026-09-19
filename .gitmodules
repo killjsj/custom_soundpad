@@ -1,0 +1,6 @@
+[submodule "CustomSoundpad_frontend"]
+	path = CustomSoundpad_frontend
+	url = https://github.com/killjsj/custom_soundpad_frontend.git
+[submodule "InjectAudioApo"]
+	path = InjectAudioApo
+	url = https://github.com/killjsj/inject_audio_apo.git
