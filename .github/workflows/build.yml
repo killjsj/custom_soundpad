@@ -2,10 +2,7 @@ name: build
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
-
+    
 permissions:
   contents: write
 
@@ -130,8 +127,7 @@ jobs:
           path: build/
           if-no-files-found: error
 
-      - name: Create release (tag only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Create release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
