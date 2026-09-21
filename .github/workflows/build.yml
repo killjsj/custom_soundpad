@@ -104,10 +104,16 @@ jobs:
             Select-Object -First 1
           if ($match) { $name = $match.Matches[0].Groups[1].Value }
 
-          New-Item -ItemType Directory -Force build | Out-Null
-          & $env:GODOT_EXE --headless --path CustomSoundpad_frontend --export-release 'Windows Desktop' "build\$name.exe"
+          # --path 会让 Godot 切换工作目录到项目目录，因此导出路径必须传绝对路径，
+          # 否则相对路径会被解析到 CustomSoundpad_frontend\ 下而报 "The given export path doesn't exist."
+          $outDir = Join-Path $env:GITHUB_WORKSPACE 'build'
+          New-Item -ItemType Directory -Force $outDir | Out-Null
+          $outExe = Join-Path $outDir "$name.exe"
+
+          & $env:GODOT_EXE --headless --path CustomSoundpad_frontend --export-release 'Windows Desktop' $outExe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-ChildItem -LiteralPath build | Select-Object Name, Length
+          if (-not (Test-Path -LiteralPath $outExe)) { throw "Export did not produce $outExe" }
+          Get-ChildItem -LiteralPath $outDir | Select-Object Name, Length
 
       # 6. frontend\bin -> build\bin
       - name: Package bin
